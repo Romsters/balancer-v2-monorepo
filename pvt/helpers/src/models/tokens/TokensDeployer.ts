@@ -19,7 +19,10 @@ class TokensDeployer {
       defaultSender,
       varyDecimals
     );
-    const tokens = await Promise.all(deployments.map(this.deployToken));
+    const tokens = [];
+    for (let deployment of deployments) {
+      tokens.push(await this.deployToken(deployment));
+    };
     const sortedTokens = sorted ? this._sortTokensDeployment(tokens, params) : tokens;
     return new TokenList(sortedTokens);
   }

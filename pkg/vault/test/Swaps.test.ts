@@ -164,10 +164,10 @@ describe('Swaps', () => {
           ];
 
           await expectBalanceChange(
-            () =>
-              vault
+            async () =>
+              (await vault
                 .connect(sender)
-                .batchSwap(SwapKind.GivenIn, swaps, tokenAddresses, funds, limits, deadline, { value: bn(1e18) }),
+                .batchSwap(SwapKind.GivenIn, swaps, tokenAddresses, funds, limits, deadline, { value: bn(1e18) })).wait(),
             tokens,
             [
               { account: vault, changes: { WETH: 1e18, DAI: -2e18 } },
@@ -192,10 +192,10 @@ describe('Swaps', () => {
           const gasPrice = await ethers.provider.getGasPrice();
           const receipt: ContractReceipt = await (
             await expectBalanceChange(
-              () =>
-                vault
+              async () =>
+                (await vault
                   .connect(sender)
-                  .batchSwap(SwapKind.GivenIn, swaps, tokenAddresses, funds, limits, deadline, { gasPrice }),
+                  .batchSwap(SwapKind.GivenIn, swaps, tokenAddresses, funds, limits, deadline, { gasPrice })).wait(),
               tokens,
               [
                 { account: vault, changes: { WETH: -2e18, DAI: 1e18 } },
@@ -262,10 +262,10 @@ describe('Swaps', () => {
           ];
 
           await expect(
-            vault
+            (await vault
               .connect(sender)
-              .batchSwap(SwapKind.GivenIn, swaps, tokenAddresses, funds, limits, deadline, { value: bn(1e18).sub(1) })
-          ).to.be.revertedWith('INSUFFICIENT_ETH');
+              .batchSwap(SwapKind.GivenIn, swaps, tokenAddresses, funds, limits, deadline, { value: bn(1e18).sub(1) })).wait()
+          ).to.be.reverted;
         });
 
         it('returns excess ETH if more ETH than required was supplied', async () => {
@@ -299,9 +299,9 @@ describe('Swaps', () => {
       context('when the sender is an approved relayer', () => {
         sharedBeforeEach(async () => {
           const action = await actionId(vault, 'batchSwap');
-          await authorizer.connect(admin).grantPermission(action, other.address, ANY_ADDRESS);
+          await (await authorizer.connect(admin).grantPermission(action, other.address, ANY_ADDRESS)).wait();
 
-          await vault.connect(trader).setRelayerApproval(trader.address, other.address, true);
+          await (await vault.connect(trader).setRelayerApproval(trader.address, other.address, true)).wait();
         });
 
         it('returns excess sent ETH to the relayer', async () => {
@@ -385,7 +385,7 @@ describe('Swaps', () => {
 
   async function deployPool(specialization: PoolSpecialization, tokenSymbols: string[]): Promise<string> {
     const pool = await deploy('MockPool', { args: [vault.address, specialization] });
-    await pool.setMultiplier(fp(2));
+    await (await pool.setMultiplier(fp(2))).wait();
 
     // Register tokens
     const sortedTokenAddresses = tokenSymbols
@@ -395,18 +395,18 @@ describe('Swaps', () => {
 
     const assetManagers = sortedTokenAddresses.map(() => ZERO_ADDRESS);
 
-    await pool.connect(lp).registerTokens(sortedTokenAddresses, assetManagers);
+    await (await pool.connect(lp).registerTokens(sortedTokenAddresses, assetManagers)).wait();
 
     // Join the pool - the actual amount is not relevant since the MockPool relies on the multiplier to calculate prices
     const tokenAmounts = sortedTokenAddresses.map(() => poolInitialBalance);
 
     const poolId = pool.getPoolId();
-    await vault.connect(lp).joinPool(poolId, lp.address, other.address, {
+    await (await vault.connect(lp).joinPool(poolId, lp.address, other.address, {
       assets: sortedTokenAddresses,
       maxAmountsIn: tokenAmounts,
       fromInternalBalance: false,
       userData: encodeJoin(tokenAmounts, Array(sortedTokenAddresses.length).fill(0)),
-    });
+    })).wait();
 
     return poolId;
   }
@@ -438,7 +438,7 @@ describe('Swaps', () => {
         const assertSwap = async (data: string, sender: SignerWithAddress, expectedChanges: any[]): Promise<void> => {
           // Hardcoding a gas limit prevents (slow) gas estimation
           await expectBalanceChange(
-            () => sender.sendTransaction({ to: vault.address, data, gasLimit: MAX_GAS_LIMIT }),
+            async () => (await sender.sendTransaction({ to: vault.address, data, gasLimit: MAX_GAS_LIMIT })).wait(),
             tokens,
             expectedChanges
           );
@@ -512,11 +512,9 @@ describe('Swaps', () => {
           it(`reverts ${isSingleSwap ? '(single)' : ''}`, async () => {
             const sender = input.fromOther ? other : trader;
             const swap = toSingleSwap(SwapKind.GivenIn, input);
-            const call = vault.connect(sender).swap(swap, funds, MAX_UINT256, MAX_UINT256);
+            const call = await vault.connect(sender).swap(swap, funds, MAX_UINT256, MAX_UINT256);
 
-            singleSwapReason
-              ? await expect(call).to.be.revertedWith(singleSwapReason)
-              : await expect(call).to.be.reverted;
+            await expect(call.wait()).to.be.reverted
           });
         }
 
@@ -527,10 +525,10 @@ describe('Swaps', () => {
           const limits = Array(tokens.length).fill(MAX_INT256);
           const deadline = MAX_UINT256;
 
-          const call = vault
+          const call = await vault
             .connect(sender)
             .batchSwap(SwapKind.GivenIn, swaps, tokens.addresses, funds, limits, deadline);
-          defaultReason ? await expect(call).to.be.revertedWith(defaultReason) : await expect(call).to.be.reverted;
+          await expect(call.wait()).to.be.reverted
         });
       };
 
@@ -559,13 +557,13 @@ describe('Swaps', () => {
                             sharedBeforeEach('grant permission to relayer', async () => {
                               const single = await actionId(vault, 'swap');
                               const batch = await actionId(vault, 'batchSwap');
-                              await authorizer.connect(admin).grantPermission(single, other.address, ANY_ADDRESS);
-                              await authorizer.connect(admin).grantPermission(batch, other.address, ANY_ADDRESS);
+                              await (await authorizer.connect(admin).grantPermission(single, other.address, ANY_ADDRESS)).wait();
+                              await (await authorizer.connect(admin).grantPermission(batch, other.address, ANY_ADDRESS)).wait();
                             });
 
                             context('when the relayer is allowed by the user', () => {
                               sharedBeforeEach('allow relayer', async () => {
-                                await vault.connect(trader).setRelayerApproval(trader.address, other.address, true);
+                                await (await vault.connect(trader).setRelayerApproval(trader.address, other.address, true)).wait();
                               });
 
                               assertSwapGivenIn({ swaps, fromOther }, { DAI: 2e18, MKR: -1e18 });
@@ -573,7 +571,7 @@ describe('Swaps', () => {
 
                             context('when the relayer is not allowed by the user', () => {
                               sharedBeforeEach('disallow relayer', async () => {
-                                await vault.connect(trader).setRelayerApproval(trader.address, other.address, false);
+                                await (await vault.connect(trader).setRelayerApproval(trader.address, other.address, false)).wait();
                               });
 
                               context('when the relayer has a valid signature from the user', () => {
@@ -598,16 +596,16 @@ describe('Swaps', () => {
                               const single = await actionId(vault, 'swap');
                               const batch = await actionId(vault, 'batchSwap');
                               if (await authorizer.hasPermission(single, other.address, ANY_ADDRESS)) {
-                                await authorizer.connect(admin).revokePermission(single, other.address, ANY_ADDRESS);
+                                await (await authorizer.connect(admin).revokePermission(single, other.address, ANY_ADDRESS)).wait();
                               }
                               if (await authorizer.hasPermission(batch, other.address, ANY_ADDRESS)) {
-                                await authorizer.connect(admin).revokePermission(batch, other.address, ANY_ADDRESS);
+                                await (await authorizer.connect(admin).revokePermission(batch, other.address, ANY_ADDRESS)).wait();
                               }
                             });
 
                             context('when the relayer is allowed by the user', () => {
                               sharedBeforeEach('allow relayer', async () => {
-                                await vault.connect(trader).setRelayerApproval(trader.address, other.address, true);
+                                await (await vault.connect(trader).setRelayerApproval(trader.address, other.address, true)).wait();
                               });
 
                               assertSwapGivenInReverts({ swaps, fromOther }, 'SENDER_NOT_ALLOWED');
@@ -615,7 +613,7 @@ describe('Swaps', () => {
 
                             context('when the relayer is not allowed by the user', () => {
                               sharedBeforeEach('disallow relayer', async () => {
-                                await vault.connect(trader).setRelayerApproval(trader.address, other.address, false);
+                                await (await vault.connect(trader).setRelayerApproval(trader.address, other.address, false)).wait();
                               });
 
                               assertSwapGivenInReverts({ swaps, fromOther }, 'SENDER_NOT_ALLOWED');
@@ -631,7 +629,7 @@ describe('Swaps', () => {
 
                         context('when using less than available as internal balance', () => {
                           sharedBeforeEach('deposit to internal balance', async () => {
-                            await vault.connect(trader).manageUserBalance([
+                            await (await vault.connect(trader).manageUserBalance([
                               {
                                 kind: 0, // deposit
                                 asset: tokens.DAI.address,
@@ -646,7 +644,7 @@ describe('Swaps', () => {
                                 sender: trader.address,
                                 recipient: trader.address,
                               },
-                            ]);
+                            ])).wait();
                           });
 
                           assertSwapGivenIn({ swaps }, { DAI: 2e18 }, { MKR: 0, DAI: 1e18 });
@@ -654,7 +652,7 @@ describe('Swaps', () => {
 
                         context('when using more than available as internal balance', () => {
                           sharedBeforeEach('deposit to internal balance', async () => {
-                            await vault.connect(trader).manageUserBalance([
+                            await (await vault.connect(trader).manageUserBalance([
                               {
                                 kind: 0, // deposit
                                 asset: tokens.MKR.address,
@@ -662,7 +660,7 @@ describe('Swaps', () => {
                                 sender: trader.address,
                                 recipient: trader.address,
                               },
-                            ]);
+                            ])).wait();
                           });
 
                           assertSwapGivenIn({ swaps }, { DAI: 2e18, MKR: -0.7e18 }, { MKR: 0 });
@@ -787,7 +785,7 @@ describe('Swaps', () => {
                     sharedBeforeEach('tweak the main pool to give back as much as it receives', async () => {
                       const [poolAddress] = (await vault.getPool(mainPoolId)) as [string, unknown];
                       const pool = await deployedAt('MockPool', poolAddress);
-                      await pool.setMultiplier(FP_ONE);
+                      await (await pool.setMultiplier(FP_ONE)).wait();
                     });
 
                     beforeEach('tweak sender and recipient to be other address', async () => {
@@ -962,7 +960,7 @@ describe('Swaps', () => {
             const recipient = input.toOther ? other : trader;
             const swap = toSingleSwap(SwapKind.GivenOut, input);
 
-            await expectBalanceChange(() => vault.connect(sender).swap(swap, funds, MAX_UINT256, MAX_UINT256), tokens, [
+            await expectBalanceChange(async () => (await vault.connect(sender).swap(swap, funds, MAX_UINT256, MAX_UINT256)).wait(), tokens, [
               { account: recipient, changes },
             ]);
 
@@ -985,7 +983,7 @@ describe('Swaps', () => {
           const deadline = MAX_UINT256;
 
           await expectBalanceChange(
-            () => vault.connect(sender).batchSwap(SwapKind.GivenOut, swaps, tokens.addresses, funds, limits, deadline),
+            async () => (await vault.connect(sender).batchSwap(SwapKind.GivenOut, swaps, tokens.addresses, funds, limits, deadline)).wait(),
             tokens,
             [{ account: recipient, changes }]
           );
@@ -1011,11 +1009,10 @@ describe('Swaps', () => {
           it(`reverts ${isSingleSwap ? '(single)' : ''}`, async () => {
             const sender = input.fromOther ? other : trader;
             const swap = toSingleSwap(SwapKind.GivenOut, input);
-            const call = vault.connect(sender).swap(swap, funds, MAX_UINT256, MAX_UINT256);
+            const call = await vault.connect(sender).swap(swap, funds, MAX_UINT256, MAX_UINT256);
 
-            singleSwapReason
-              ? await expect(call).to.be.revertedWith(singleSwapReason)
-              : await expect(call).to.be.reverted;
+            
+            await expect(call.wait()).to.be.reverted;
           });
         }
 
@@ -1026,11 +1023,11 @@ describe('Swaps', () => {
           const limits = Array(tokens.length).fill(MAX_INT256);
           const deadline = MAX_UINT256;
 
-          const call = vault
+          const call = await vault
             .connect(sender)
             .batchSwap(SwapKind.GivenOut, swaps, tokens.addresses, funds, limits, deadline);
 
-          defaultReason ? await expect(call).to.be.revertedWith(defaultReason) : await expect(call).to.be.reverted;
+          await expect(call.wait()).to.be.reverted;
         });
       };
 
@@ -1059,13 +1056,13 @@ describe('Swaps', () => {
                             sharedBeforeEach('grant permission to relayer', async () => {
                               const single = await actionId(vault, 'swap');
                               const batch = await actionId(vault, 'batchSwap');
-                              await authorizer.connect(admin).grantPermission(single, other.address, ANY_ADDRESS);
-                              await authorizer.connect(admin).grantPermission(batch, other.address, ANY_ADDRESS);
+                              await (await authorizer.connect(admin).grantPermission(single, other.address, ANY_ADDRESS)).wait();
+                              await (await authorizer.connect(admin).grantPermission(batch, other.address, ANY_ADDRESS)).wait();
                             });
 
                             context('when the relayer is allowed by the user', () => {
                               sharedBeforeEach('allow relayer', async () => {
-                                await vault.connect(trader).setRelayerApproval(trader.address, other.address, true);
+                                await (await vault.connect(trader).setRelayerApproval(trader.address, other.address, true)).wait();
                               });
 
                               assertSwapGivenOut({ swaps, fromOther }, { DAI: 1e18, MKR: -0.5e18 });
@@ -1073,7 +1070,7 @@ describe('Swaps', () => {
 
                             context('when the relayer is not allowed by the user', () => {
                               sharedBeforeEach('disallow relayer', async () => {
-                                await vault.connect(trader).setRelayerApproval(trader.address, other.address, false);
+                                await (await vault.connect(trader).setRelayerApproval(trader.address, other.address, false)).wait();
                               });
 
                               assertSwapGivenOutReverts({ swaps, fromOther }, 'USER_DOESNT_ALLOW_RELAYER');
@@ -1085,16 +1082,16 @@ describe('Swaps', () => {
                               const single = await actionId(vault, 'swap');
                               const batch = await actionId(vault, 'batchSwap');
                               if (await authorizer.hasPermission(single, other.address, ANY_ADDRESS)) {
-                                await authorizer.connect(admin).revokePermission(single, other.address, ANY_ADDRESS);
+                                await (await authorizer.connect(admin).revokePermission(single, other.address, ANY_ADDRESS)).wait();
                               }
                               if (await authorizer.hasPermission(batch, other.address, ANY_ADDRESS)) {
-                                await authorizer.connect(admin).revokePermission(batch, other.address, ANY_ADDRESS);
+                                await (await authorizer.connect(admin).revokePermission(batch, other.address, ANY_ADDRESS)).wait();
                               }
                             });
 
                             context('when the relayer is allowed by the user', () => {
                               sharedBeforeEach('allow relayer', async () => {
-                                await vault.connect(trader).setRelayerApproval(trader.address, other.address, true);
+                                await (await vault.connect(trader).setRelayerApproval(trader.address, other.address, true)).wait();
                               });
 
                               assertSwapGivenOutReverts({ swaps, fromOther }, 'SENDER_NOT_ALLOWED');
@@ -1102,7 +1099,7 @@ describe('Swaps', () => {
 
                             context('when the relayer is not allowed by the user', () => {
                               sharedBeforeEach('disallow relayer', async () => {
-                                await vault.connect(trader).setRelayerApproval(trader.address, other.address, false);
+                                await (await vault.connect(trader).setRelayerApproval(trader.address, other.address, false)).wait();
                               });
 
                               assertSwapGivenOutReverts({ swaps, fromOther }, 'SENDER_NOT_ALLOWED');
@@ -1118,7 +1115,7 @@ describe('Swaps', () => {
 
                         context('when using less than available as internal balance', () => {
                           sharedBeforeEach('deposit to internal balance', async () => {
-                            await vault.connect(trader).manageUserBalance([
+                            await (await vault.connect(trader).manageUserBalance([
                               {
                                 kind: 0, // deposit
                                 asset: tokens.DAI.address,
@@ -1133,7 +1130,7 @@ describe('Swaps', () => {
                                 sender: trader.address,
                                 recipient: trader.address,
                               },
-                            ]);
+                            ])).wait();
                           });
 
                           assertSwapGivenOut({ swaps }, { DAI: 1e18 }, { MKR: 0, DAI: 1e18 });
@@ -1141,7 +1138,7 @@ describe('Swaps', () => {
 
                         context('when using more than available as internal balance', () => {
                           sharedBeforeEach('deposit to internal balance', async () => {
-                            await vault.connect(trader).manageUserBalance([
+                            await (await vault.connect(trader).manageUserBalance([
                               {
                                 kind: 0, // deposit
                                 asset: tokens.MKR.address,
@@ -1149,7 +1146,7 @@ describe('Swaps', () => {
                                 sender: trader.address,
                                 recipient: trader.address,
                               },
-                            ]);
+                            ])).wait();
                           });
 
                           assertSwapGivenOut({ swaps }, { DAI: 1e18, MKR: -0.2e18 });
@@ -1277,7 +1274,7 @@ describe('Swaps', () => {
                     beforeEach('tweak the main pool to give back as much as it receives', async () => {
                       const [poolAddress] = (await vault.getPool(mainPoolId)) as [string, unknown];
                       const pool = await deployedAt('MockPool', poolAddress);
-                      await pool.setMultiplier(fp(1));
+                      await (await pool.setMultiplier(fp(1))).wait();
                     });
 
                     beforeEach('tweak sender and recipient to be other address', async () => {

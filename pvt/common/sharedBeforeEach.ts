@@ -20,7 +20,8 @@ export function sharedBeforeEach(nameOrFn: string | AsyncFunc, maybeFn?: AsyncFu
   let initialized = false;
 
   beforeEach(wrapWithTitle(name, 'Running shared before each or reverting'), async function () {
-    if (!initialized) {
+    await fn.call(this);
+    /*if (!initialized) {
       const prevSnapshot = SNAPSHOTS.pop();
       if (prevSnapshot !== undefined) {
         await prevSnapshot.restore();
@@ -36,7 +37,7 @@ export function sharedBeforeEach(nameOrFn: string | AsyncFunc, maybeFn?: AsyncFu
       if (shapshot === undefined) throw Error('Missing sharedBeforeEach snapshot');
       await shapshot.restore();
       SNAPSHOTS.push(await takeSnapshot());
-    }
+    }*/
   });
 
   after(async function () {

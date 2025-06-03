@@ -31,7 +31,9 @@ export async function deploy(
   const artifact = getArtifact(contract);
 
   const factory = await ethers.getContractFactoryFromArtifact(artifact, { signer: from, libraries });
+  console.log(`Deploying ${artifact.contractName}.`)
   const instance = await factory.deploy(...args);
+  console.log(`Deployed ${artifact.contractName}.`)
 
   return instance.deployed();
 }

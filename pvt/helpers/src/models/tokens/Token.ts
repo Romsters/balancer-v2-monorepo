@@ -52,30 +52,30 @@ export default class Token {
     const token = from ? this.instance.connect(from) : this.instance;
 
     if (this.symbol === 'WETH') {
-      await token.deposit({ value: amount });
-      await token.transfer(TypesConverter.toAddress(to), amount);
+      await (await token.deposit({ value: amount })).wait();
+      await (await token.transfer(TypesConverter.toAddress(to), amount)).wait();
     } else if (this.symbol !== 'wstETH' && this.symbol != 'wampl') {
       // wstETH and wampl need permissioned calls (wrap() in the case of wstETH); calling it
       // generically from init() would fail. So tests that mint these tokens (e.g.,
       // UnbuttonAaveLinearPool) need to do it separately, and we need to add these exceptions
       // here, so that mint() is a no-op for these tokens.
-      await token.mint(TypesConverter.toAddress(to), amount ?? MAX_UINT256);
+      await (await token.mint(TypesConverter.toAddress(to), amount ?? MAX_UINT256)).wait();
     }
   }
 
   async transfer(to: Account, amount: BigNumberish, { from }: TxParams = {}): Promise<ContractTransaction> {
     const token = from ? this.instance.connect(from) : this.instance;
-    return token.transfer(TypesConverter.toAddress(to), amount);
+    return (await token.transfer(TypesConverter.toAddress(to), amount)).wait();
   }
 
   async approve(to: Account, amount?: BigNumberish, { from }: TxParams = {}): Promise<ContractTransaction> {
     const token = from ? this.instance.connect(from) : this.instance;
-    return token.approve(TypesConverter.toAddress(to), amount ?? MAX_UINT256);
+    return (await token.approve(TypesConverter.toAddress(to), amount ?? MAX_UINT256)).wait();
   }
 
   async burn(amount: BigNumberish, { from }: TxParams = {}): Promise<ContractTransaction> {
     const token = from ? this.instance.connect(from) : this.instance;
-    return token.burn(amount);
+    return (await token.burn(amount)).wait();
   }
 
   compare(anotherToken: Token): number {
