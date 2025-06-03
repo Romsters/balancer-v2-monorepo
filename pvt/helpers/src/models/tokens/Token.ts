@@ -52,9 +52,12 @@ export default class Token {
     const token = from ? this.instance.connect(from) : this.instance;
 
     if (this.symbol === 'WETH') {
-      console.log("Minting WETH...")
-      await (await token.deposit({ value: amount })).wait();
+      console.log(`Depositing ${amount?.toString()} WETH...`);
+      const depositTx = await token.deposit({ value: amount });
+      await depositTx.wait();
+      console.log("Transferring WETH...")
       await (await token.transfer(TypesConverter.toAddress(to), amount)).wait();
+      console.log("Transferred WETH")
     } else if (this.symbol !== 'wstETH' && this.symbol != 'wampl') {
       // wstETH and wampl need permissioned calls (wrap() in the case of wstETH); calling it
       // generically from init() would fail. So tests that mint these tokens (e.g.,
