@@ -35,13 +35,13 @@ export default {
 
     // Then, with the entrypoint correctly deployed, we create the actual authorizer to be used and set it in the vault.
     const authorizer = await this._deployAuthorizer(admin, adaptorEntrypoint, nextAdmin, from);
-    console.log("All deployed");
+    console.log("Vault deployed");
 
     const setAuthorizerActionId = await actionId(vault, 'setAuthorizer');
     await basicAuthorizer.grantRolesToMany([setAuthorizerActionId], [admin.address]);
     await vault.connect(admin).setAuthorizer(authorizer.address);
 
-    console.log("All done");
+    console.log("Vault done");
     return new Vault(mocked, vault, authorizer, authorizerAdaptor, adaptorEntrypoint, protocolFeeProvider, admin);
   },
 

@@ -52,6 +52,7 @@ export default class Token {
     const token = from ? this.instance.connect(from) : this.instance;
 
     if (this.symbol === 'WETH') {
+      console.log("Minting WETH...")
       await (await token.deposit({ value: amount })).wait();
       await (await token.transfer(TypesConverter.toAddress(to), amount)).wait();
     } else if (this.symbol !== 'wstETH' && this.symbol != 'wampl') {

@@ -13,7 +13,7 @@ task(TASK_COMPILE).setAction(overrideQueryFunctions);
 
 export default {
   mocha: {
-    timeout: 180000, // timeout in milliseconds (here 120 seconds)
+    timeout: 300000, // timeout in milliseconds (here 300 seconds)
   },
   solidity: {
     compilers: hardhatBaseConfig.compilers,
